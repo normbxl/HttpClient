@@ -7,7 +7,8 @@
 
 #include <Arduino.h>
 #include <IPAddress.h>
-#include "Client.h"
+#include "ESP8266Client.h"
+#include <Client.h>
 
 static const int HTTP_SUCCESS =0;
 // The end of the headers has been reached.  This consumes the '\n'
@@ -43,11 +44,10 @@ public:
 
 // FIXME Write longer API request, using port and user-agent, example
 // FIXME Update tempToPachube example to calculate Content-Length correctly
-
 #ifdef PROXY_ENABLED // currently disabled as introduces dependency on Dns.h in Ethernet
-    HttpClient(Client& aClient, const char* aProxy =NULL, uint16_t aProxyPort =0);
+	HttpClient(ESP8266Client& aClient, const char* aProxy = NULL, uint16_t aProxyPort = 0);
 #else
-    HttpClient(Client& aClient);
+	HttpClient(ESP8266Client& aClient);
 #endif
 
     /** Start a more complex request.
@@ -428,8 +428,8 @@ protected:
         eLineStartingCRFound,
         eReadingBody
     } tHttpState;
-    // Ethernet client we're using
-    Client* iClient;
+    // ESP8266Client client we're using
+	ESP8266Client* iClient;
     // Current state of the finite-state-machine
     tHttpState iState;
     // Stores the status code for the response, once known
@@ -444,6 +444,7 @@ protected:
     IPAddress iProxyAddress;
     uint16_t iProxyPort;
     uint32_t iHttpResponseTimeout;
+
 };
 
 #endif

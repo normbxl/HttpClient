@@ -4,6 +4,8 @@
 
 #include "HttpClient.h"
 #include "b64.h"
+#include <ESP8266.h>
+
 #ifdef PROXY_ENABLED // currently disabled as introduces dependency on Dns.h in Ethernet
 #include <Dns.h>
 #endif
@@ -13,7 +15,7 @@ const char* HttpClient::kUserAgent = "Arduino/2.2.0";
 const char* HttpClient::kContentLengthPrefix = HTTP_HEADER_CONTENT_LENGTH ": ";
 
 #ifdef PROXY_ENABLED // currently disabled as introduces dependency on Dns.h in Ethernet
-HttpClient::HttpClient(Client& aClient, const char* aProxy, uint16_t aProxyPort)
+HttpClient::HttpClient(ESP8266Client& aClient, const char* aProxy, uint16_t aProxyPort)
  : iClient(&aClient), iProxyPort(aProxyPort)
 {
   resetState();
@@ -28,7 +30,7 @@ HttpClient::HttpClient(Client& aClient, const char* aProxy, uint16_t aProxyPort)
   }
 }
 #else
-HttpClient::HttpClient(Client& aClient)
+HttpClient::HttpClient(ESP8266Client& aClient)
  : iClient(&aClient), iProxyPort(0)
 {
   resetState();
@@ -88,7 +90,7 @@ int HttpClient::startRequest(const char* aServerName, uint16_t aServerPort, cons
     }
 
     // Now we're connected, send the first part of the request
-    int ret = sendInitialHeaders(aServerName, IPAddress(0,0,0,0), aServerPort, aURLPath, aHttpMethod, aUserAgent);
+	int ret = sendInitialHeaders(aServerName, IPAddress(0,0,0,0), aServerPort, aURLPath, aHttpMethod, aUserAgent);
     if ((initialState == eIdle) && (HTTP_SUCCESS == ret))
     {
         // This was a simple version of the API, so terminate the headers now
@@ -129,7 +131,7 @@ int HttpClient::startRequest(const IPAddress& aServerAddress, const char* aServe
             return HTTP_ERROR_CONNECTION_FAILED;
         }
     }
-
+	iClient->buffering(true);
     // Now we're connected, send the first part of the request
     int ret = sendInitialHeaders(aServerName, aServerAddress, aServerPort, aURLPath, aHttpMethod, aUserAgent);
     if ((initialState == eIdle) && (HTTP_SUCCESS == ret))
@@ -147,6 +149,7 @@ int HttpClient::sendInitialHeaders(const char* aServerName, IPAddress aServerIP,
 #ifdef LOGGING
     Serial.println("Connected");
 #endif
+	
     // Send the HTTP command, i.e. "GET /somepath/ HTTP/1.0"
     iClient->print(aHttpMethod);
     iClient->print(" ");
@@ -198,7 +201,7 @@ int HttpClient::sendInitialHeaders(const char* aServerName, IPAddress aServerIP,
     // We don't support persistent connections, so tell the server to
     // close this connection after we're done
     sendHeader(HTTP_HEADER_CONNECTION, "close");
-
+	
     // Everything has gone well
     iState = eRequestStarted;
     return HTTP_SUCCESS;
@@ -275,6 +278,8 @@ void HttpClient::sendBasicAuth(const char* aUser, const char* aPassword)
 void HttpClient::finishHeaders()
 {
     iClient->println();
+	iClient->sendBuffer();
+	iClient->buffering(false);
     iState = eRequestSent;
 }
 

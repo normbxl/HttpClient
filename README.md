@@ -1,6 +1,7 @@
-# HttpClient
+# HttpClient - ESP8266 mod
 
-HttpClient is a library to make it easier to interact with web servers from Arduino.
+HttpClient is a library to make it easier to interact with web servers from Arduino, this one is adapted to work better with the ESP8266Client.
+Originally created by Adrian McEwen (https://github.com/amcewen)
 
 ## Dependencies
 
@@ -8,7 +9,7 @@ HttpClient is a library to make it easier to interact with web servers from Ardu
 
 ## Installation
 
-1. Download the latest version of the library from https://github.com/amcewen/HttpClient/releases and save the file somewhere
+1. Download the latest version of the library from https://github.com/normbxl/HttpClient/releases and save the file somewhere
 1. In the Arduino IDE, go to the Sketch -> Import Library -> Add Library... menu option
 1. Find the zip file that you saved in the first step, and choose that
 1. Check that it has been successfully added by opening the Sketch -> Import Library menu.  You should now see HttpClient listed among the available libraries.
