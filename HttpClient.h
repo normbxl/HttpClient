@@ -328,7 +328,7 @@ public:
       this will still return data as read() would, but slightly less efficiently
       @return The next character of the response headers
     */
-    int readHeader();
+    char readHeader();
 
     /** Skip any response headers to get to the body.
       Use this if you don't want to do any special processing of the headers

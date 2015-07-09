@@ -489,7 +489,7 @@ int HttpClient::read(uint8_t *buf, size_t size)
     return ret;
 }
 
-int HttpClient::readHeader()
+char HttpClient::readHeader()
 {
     char c = read();
 
@@ -502,6 +502,7 @@ int HttpClient::readHeader()
 
     // Whilst reading out the headers to whoever wants them, we'll keep an
     // eye out for the "Content-Length" header
+
     switch(iState)
     {
     case eStatusCodeRead:
