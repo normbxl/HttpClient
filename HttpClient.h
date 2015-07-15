@@ -5,6 +5,8 @@
 #ifndef HttpClient_h
 #define HttpClient_h
 
+// #define LOGGING
+
 #include <Arduino.h>
 #include <IPAddress.h>
 #include "ESP8266Client.h"
@@ -45,15 +47,18 @@ public:
     static const int kNoContentLengthHeader =-1;
     static const int kHttpPort =80;
     static const char* kUserAgent;
-
+	
 // FIXME Write longer API request, using port and user-agent, example
 // FIXME Update tempToPachube example to calculate Content-Length correctly
 #ifdef PROXY_ENABLED // currently disabled as introduces dependency on Dns.h in Ethernet
 	HttpClient(ESP8266Client& aClient, const char* aProxy = NULL, uint16_t aProxyPort = 0);
 #else
-	HttpClient(ESP8266Client& aClient);
+	
+		HttpClient(ESP8266Client& aClient, Stream& dbg);
+	
+		HttpClient(ESP8266Client& aClient);
+	
 #endif
-
     /** Start a more complex request.
         Use this when you need to send additional headers in the request,
         but you will also need to call endRequest() when you are finished.
@@ -362,6 +367,8 @@ public:
     */
     int contentLength() { return iContentLength; };
 
+	String getTransferEncoding() { return transferEncoding; };
+
     // Inherited from Print
     // Note: 1st call to these indicates the user is sending the body, so if need
     // Note: be we should finish the header first
@@ -386,6 +393,7 @@ public:
     virtual uint32_t httpResponseTimeout() { return iHttpResponseTimeout; };
     virtual void setHttpResponseTimeout(uint32_t timeout) { iHttpResponseTimeout = timeout; };
 protected:
+
     /** Reset internal state data back to the "just initialised" state
     */
     void resetState();
@@ -413,6 +421,8 @@ protected:
     */
     void finishHeaders();
 
+	int hexToInt(char c);
+
     // Number of milliseconds that we wait each time there isn't any data
     // available to be read (during status code and header processing)
     static const int kHttpWaitForDataDelay = 1000;
@@ -430,10 +440,14 @@ protected:
         eStatusCodeRead,
         eReadingContentLength,
 		eReadingTransferEncoding,
+		eReadingChunkSize,
         eSkipToEndOfHeader,
         eLineStartingCRFound,
         eReadingBody
     } tHttpState;
+
+	Stream* _dbg;
+
     // ESP8266Client client we're using
 	ESP8266Client* iClient;
     // Current state of the finite-state-machine
@@ -444,11 +458,12 @@ protected:
     int iContentLength;
     // How many bytes of the response body have been read by the user
     int iBodyLengthConsumed;
+	int iHeaderLengthConsumed;
     // How far through a Content-Length header prefix we are
     const char* iContentLengthPtr;
 	const char* iTransferEncodingPtr;
 
-	char transferEncoding[10];
+	String transferEncoding;
     // Address of the proxy to use, if we're using one
     IPAddress iProxyAddress;
     uint16_t iProxyPort;

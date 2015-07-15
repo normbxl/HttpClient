@@ -16,26 +16,34 @@ const char* HttpClient::kContentLengthPrefix = HTTP_HEADER_CONTENT_LENGTH ": ";
 const char* HttpClient::kTransferEncodingPrefix = HTTP_HEADER_TRANSFER_ENCODING ": ";
 
 #ifdef PROXY_ENABLED // currently disabled as introduces dependency on Dns.h in Ethernet
-HttpClient::HttpClient(ESP8266Client& aClient, const char* aProxy, uint16_t aProxyPort)
-	: iClient(&aClient), iProxyPort(aProxyPort)
-{
-	resetState();
-	if (aProxy)
+	HttpClient::HttpClient(ESP8266Client& aClient, const char* aProxy, uint16_t aProxyPort)
+		: iClient(&aClient), iProxyPort(aProxyPort)
 	{
-		// Resolve the IP address for the proxy
-		DNSClient dns;
-		dns.begin(Ethernet.dnsServerIP());
-		// Not ideal that we discard any errors here, but not a lot we can do in the ctor
-		// and we'll get a connect error later anyway
-		(void)dns.getHostByName(aProxy, iProxyAddress);
+		resetState();
+		if (aProxy)
+		{
+			// Resolve the IP address for the proxy
+			DNSClient dns;
+			dns.begin(Ethernet.dnsServerIP());
+			// Not ideal that we discard any errors here, but not a lot we can do in the ctor
+			// and we'll get a connect error later anyway
+			(void)dns.getHostByName(aProxy, iProxyAddress);
+		}
 	}
-}
 #else
-HttpClient::HttpClient(ESP8266Client& aClient)
-	: iClient(&aClient), iProxyPort(0)
-{
-	resetState();
-}
+	
+		HttpClient::HttpClient(ESP8266Client& aClient, Stream& dbg)
+			: iClient(&aClient), _dbg(&dbg), iProxyPort(0)
+		{
+			resetState();
+		}
+	
+		HttpClient::HttpClient(ESP8266Client& aClient)
+			: iClient(&aClient), iProxyPort(0)
+		{
+			resetState();
+		}
+	
 #endif
 
 void HttpClient::resetState()
@@ -44,10 +52,13 @@ void HttpClient::resetState()
 	iStatusCode = 0;
 	iContentLength = 0;
 	iBodyLengthConsumed = 0;
+	iHeaderLengthConsumed = 0;
 	iContentLengthPtr = kContentLengthPrefix;
-	iTransferEncodingPtr = kTranferEncodingPrefix;
+	iTransferEncodingPtr = kTransferEncodingPrefix;
 	iHttpResponseTimeout = kHttpResponseTimeout;
-	transferEncoding = "";
+	
+	transferEncoding = String("");
+	
 }
 
 void HttpClient::stop()
@@ -75,7 +86,7 @@ int HttpClient::startRequest(const char* aServerName, uint16_t aServerPort, cons
 		if (!iClient->connect(iProxyAddress, iProxyPort) > 0)
 		{
 #ifdef LOGGING
-			Serial.println("Proxy connection failed");
+			_dbg->println("Proxy connection failed");
 #endif
 			return HTTP_ERROR_CONNECTION_FAILED;
 		}
@@ -86,7 +97,7 @@ int HttpClient::startRequest(const char* aServerName, uint16_t aServerPort, cons
 		if (!iClient->connect(aServerName, aServerPort) > 0)
 		{
 #ifdef LOGGING
-			Serial.println("Connection failed");
+			_dbg->println("Connection failed");
 #endif
 			return HTTP_ERROR_CONNECTION_FAILED;
 		}
@@ -118,7 +129,7 @@ int HttpClient::startRequest(const IPAddress& aServerAddress, const char* aServe
 		if (!iClient->connect(iProxyAddress, iProxyPort) > 0)
 		{
 #ifdef LOGGING
-			Serial.println("Proxy connection failed");
+			_dbg->println("Proxy connection failed");
 #endif
 			return HTTP_ERROR_CONNECTION_FAILED;
 		}
@@ -129,7 +140,7 @@ int HttpClient::startRequest(const IPAddress& aServerAddress, const char* aServe
 		if (!iClient->connect(aServerAddress, aServerPort) > 0)
 		{
 #ifdef LOGGING
-			Serial.println("Connection failed");
+			_dbg->println("Connection failed");
 #endif
 			return HTTP_ERROR_CONNECTION_FAILED;
 		}
@@ -150,7 +161,7 @@ int HttpClient::startRequest(const IPAddress& aServerAddress, const char* aServe
 int HttpClient::sendInitialHeaders(const char* aServerName, IPAddress aServerIP, uint16_t aPort, const char* aURLPath, const char* aHttpMethod, const char* aUserAgent)
 {
 #ifdef LOGGING
-	Serial.println("Connected");
+	_dbg->println("Connected");
 #endif
 
 	// Send the HTTP command, i.e. "GET /somepath/ HTTP/1.0"
@@ -318,7 +329,7 @@ int HttpClient::responseStatusCode()
 		iState = eRequestSent;
 
 		unsigned long timeoutStart = millis();
-		// Psuedo-regexp we're expecting before the status-code
+		// Pseudo-regexp we're expecting before the status-code
 		const char* statusPrefix = "HTTP/*.* ";
 		const char* statusPtr = statusPrefix;
 		// Whilst we haven't timed out & haven't reached the end of the headers
@@ -355,8 +366,8 @@ int HttpClient::responseStatusCode()
 							// want
 							iStatusCode = iStatusCode*10 + (c - '0');
 						}
-						else
-						{
+						else {
+
 							// We've reached the end of the status code
 							// We could sanity check it here or double-check for ' '
 							// rather than anything else, but let's be lenient
@@ -472,6 +483,9 @@ int HttpClient::read()
 			// So keep track of how many bytes are left
 			iBodyLengthConsumed++;
 		}
+		else if (!endOfHeadersReached()) {
+			iHeaderLengthConsumed++;
+		}
 	}
 	return ret;
 #endif
@@ -494,8 +508,12 @@ int HttpClient::read(uint8_t *buf, size_t size)
 
 char HttpClient::readHeader()
 {
+	int digit;
+	static char prevChar = '\0';
 	char c = read();
-
+//#ifdef LOGGING
+//	_dbg->print(c);
+//#endif
 	if (endOfHeadersReached())
 	{
 		// We've passed the headers, but rather than return an error, we'll just
@@ -529,6 +547,7 @@ char HttpClient::readHeader()
 				iTransferEncodingPtr++;
 				if (*iTransferEncodingPtr == '\0') {
 					iState = eReadingTransferEncoding;
+		
 				}
 			}
 		}
@@ -538,6 +557,10 @@ char HttpClient::readHeader()
 			// the end of the headers
 			iState = eLineStartingCRFound;
 		}
+		/*else if ((iTransferEncodingPtr == kTransferEncodingPrefix) && (c == '\r') && strcmp(transferEncoding, "chunked") == 0) {
+			iState = eLineStartingCRFound;
+
+		}*/
 		else
 		{
 			// This isn't the Content-Length header, skip to the end of the line
@@ -549,7 +572,7 @@ char HttpClient::readHeader()
 		{
 			iContentLength = iContentLength*10 + (c - '0');
 		}
-		else
+		else if (c != ' ' && c != '\r')
 		{
 			// We've reached the end of the content length
 			// We could sanity check it here or double-check for "\r\n"
@@ -558,25 +581,62 @@ char HttpClient::readHeader()
 		}
 		break;
 	case eReadingTransferEncoding:
+		// end of TE-line, continue
 		if (c == '\n') {
-			iState = eSkipToEndOfHeader;
-			*transferEncoding = '\0';
+			iState = eStatusCodeRead;
+
 		}
 		else if (c != ':' && c != ' ') {
-			*transferEncoding = c;
-			transferEncoding++;
+			transferEncoding += c;
 		}
 		break;
-	case eLineStartingCRFound:
-		if (c == '\n')
-		{
+	case eReadingChunkSize:
+		digit = hexToInt(c);
+		
+		if (c != '\n' && digit != -1) {
+			iContentLength = (iContentLength << 4) + digit;
+		}
+		else if (c == '\n') {
 			iState = eReadingBody;
+#ifdef LOGGING
+			_dbg->println(F("chunksize end"));
+#endif
+		}
+#ifdef LOGGING
+		_dbg->print(F("eChunkSize "));
+		_dbg->println(digit);
+		_dbg->println(iContentLength);
+#endif
+		break;
+	case eLineStartingCRFound:
+		if (prevChar == '\r' && c == '\n') {
+
+			iState = eReadingBody;
+			if (transferEncoding.length() > 0  && transferEncoding.indexOf("chunked") != -1) {
+				// after an empty line the chunk size follows
+#ifdef LOGGING
+				_dbg->println(F("switching to eReadingChunkSize"));
+#endif
+				iState = eReadingChunkSize;
+
+				// Evil hack
+				prevChar = c;
+				return c;
+			}
+		}
+		else if (c != '\r' && c != '\n') {
+			iState = eStatusCodeRead;
 		}
 		break;
 	default:
 		// We're just waiting for the end of the line now
 		break;
 	};
+
+	if (prevChar == '\r' && c == '\n' &&  !endOfHeadersReached()) {
+		iState = eLineStartingCRFound;
+	}
+
 
 	if ( (c == '\n') && !endOfHeadersReached() )
 	{
@@ -585,9 +645,25 @@ char HttpClient::readHeader()
 		iContentLengthPtr = kContentLengthPrefix;
 		iTransferEncodingPtr = kTransferEncodingPrefix;
 	}
+	prevChar = c;
 	// And return the character read to whoever wants it
 	return c;
 }
 
+int HttpClient::hexToInt(const char c) {
+	int res = -1;
+	// 0-9
+	if (c >= 0x30 && c <= 0x39) {
+		res = (int)c - 0x30;
+	}
+	// A-F
+	else if (c >= 0x41 && c <= 0x46) {
+		res = (int)c - 0x37;
+	}
+	else if (c >= 0x61 && c <= 0x66) {
+		res = (int)c - 0x57;
+	}
+	return res;
+}
 
 
