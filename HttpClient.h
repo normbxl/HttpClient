@@ -34,6 +34,8 @@ static const int HTTP_ERROR_UNKNOWN_RESPONSE = -5;
 #define HTTP_METHOD_PUT    "PUT"
 #define HTTP_METHOD_DELETE "DELETE"
 #define HTTP_HEADER_CONTENT_LENGTH "Content-Length"
+#define HTTP_HEADER_TRANSFER_ENCODING "Transfer-Encoding"
+
 #define HTTP_HEADER_CONNECTION     "Connection"
 #define HTTP_HEADER_USER_AGENT     "User-Agent"
 
@@ -419,6 +421,7 @@ protected:
     // processing)
     static const int kHttpResponseTimeout = 30*1000;
     static const char* kContentLengthPrefix;
+	static const char* kTransferEncodingPrefix;
     typedef enum {
         eIdle,
         eRequestStarted,
@@ -426,6 +429,7 @@ protected:
         eReadingStatusCode,
         eStatusCodeRead,
         eReadingContentLength,
+		eReadingTransferEncoding,
         eSkipToEndOfHeader,
         eLineStartingCRFound,
         eReadingBody
@@ -442,6 +446,9 @@ protected:
     int iBodyLengthConsumed;
     // How far through a Content-Length header prefix we are
     const char* iContentLengthPtr;
+	const char* iTransferEncodingPtr;
+
+	char transferEncoding[10];
     // Address of the proxy to use, if we're using one
     IPAddress iProxyAddress;
     uint16_t iProxyPort;
