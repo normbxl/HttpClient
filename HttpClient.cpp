@@ -202,6 +202,7 @@ int HttpClient::sendInitialHeaders(const char* aServerName, IPAddress aServerIP,
     // close this connection after we're done
     sendHeader(HTTP_HEADER_CONNECTION, "close");
 	
+	sendHeader("Cache-Control", "no-store");
     // Everything has gone well
     iState = eRequestStarted;
     return HTTP_SUCCESS;
@@ -399,7 +400,7 @@ int HttpClient::responseStatusCode()
     {
         // This wasn't a properly formed status line, or at least not one we
         // could understand
-        return HTTP_ERROR_INVALID_RESPONSE;
+		return HTTP_ERROR_UNKNOWN_RESPONSE;
     }
 }
 
